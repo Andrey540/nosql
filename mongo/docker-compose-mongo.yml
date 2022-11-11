@@ -1,0 +1,17 @@
+version: '3.5'
+
+services:
+  mongo:
+    container_name: mongo
+    image: mongo:6.0
+    ports:
+      - 27017:27017
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: otus
+      MONGO_INITDB_ROOT_PASSWORD: 1234
+    volumes:
+      - mongo-db-data:/data/db
+      - "${PWD}/QUESTIONS.json:/tmp/QUESTIONS.json"
+
+volumes:
+  mongo-db-data:
