@@ -1,0 +1,64 @@
+version: '3.5'
+
+services:
+  couchbase1:
+    image: couchbase:7.1.2
+    container_name: couchbase-1
+    networks:
+      couchbase:
+        ipv4_address: 172.18.0.3
+    volumes:
+      - couchbase-db-data-1:/opt/couchbase/var
+
+  couchbase2:
+    image: couchbase:7.1.2
+    container_name: couchbase-2
+    networks:
+      couchbase:
+        ipv4_address: 172.18.0.2
+    volumes:
+      - couchbase-db-data-2:/opt/couchbase/var
+
+  couchbase3:
+    image: couchbase:7.1.2
+    container_name: couchbase-3
+    networks:
+      couchbase:
+        ipv4_address: 172.18.0.4
+    volumes:
+      - couchbase-db-data-3:/opt/couchbase/var
+    ports:
+      - 8092:8091
+
+  couchbase4:
+    image: couchbase:7.1.2
+    container_name: couchbase-4
+    networks:
+      couchbase:
+        ipv4_address: 172.18.0.5
+    volumes:
+      - couchbase-db-data-4:/opt/couchbase/var
+    ports:
+      - 8091:8091
+
+  couchbase5:
+    image: couchbase:7.1.2
+    container_name: couchbase-5
+    networks:
+      couchbase:
+        ipv4_address: 172.18.0.6
+    volumes:
+      - couchbase-db-data-5:/opt/couchbase/var
+
+networks:
+  couchbase:
+    ipam:
+      config:
+        - subnet: 172.18.0.0/24
+
+volumes:
+  couchbase-db-data-1:
+  couchbase-db-data-2:
+  couchbase-db-data-3:
+  couchbase-db-data-4:
+  couchbase-db-data-5:
