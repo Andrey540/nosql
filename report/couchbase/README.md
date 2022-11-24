@@ -168,7 +168,7 @@ SELECT count(*) FROM `travel-sample`.inventory.hotel;
 
 После этого нода снова в строю
 
-
+Зайдём на UI третьей ноды http://localhost:8092
 Остановим четвёртую ноду, которая обрабатывает запросы, и посмотрим что получилось
 ```bash
 docker stop couchbase-4
