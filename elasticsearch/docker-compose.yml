@@ -1,0 +1,21 @@
+version: '3.5'
+
+services:
+  elasticsearch:
+    image: elasticsearch:8.5.2
+    container_name: elasticsearch
+    environment:
+      - discovery.type=single-node
+      - ES_JAVA_OPTS=-Xms1g -Xmx1g
+      - xpack.security.enabled=false
+    ulimits:
+      memlock:
+        soft: -1
+        hard: -1
+    volumes:
+      - elasticsearch-db-data:/usr/share/elasticsearch/data
+    ports:
+      - 9200:9200
+
+volumes:
+  elasticsearch-db-data:
