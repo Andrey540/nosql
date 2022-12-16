@@ -52,6 +52,34 @@ services:
       - CASSANDRA_BROADCAST_ADDRESS=172.22.0.4
       - CASSANDRA_SEEDS=172.22.0.2,172.22.0.3
 
+  php:
+    image: php:7.4-cli
+    container_name: php
+    networks:
+      cassandra:
+        ipv4_address: 172.22.0.6
+    volumes:
+      - "${PWD}/php:/var/code"
+    command: "sleep 300000"
+    depends_on:
+      - cassandra-1
+      - cassandra-2
+      - cassandra-3
+
+  go:
+    image: cassandra-drivers
+    container_name: go
+    networks:
+      cassandra:
+        ipv4_address: 172.22.0.7
+    volumes:
+      - "${PWD}/../bin:/var/code"
+    command: "sleep 300000"
+    depends_on:
+      - cassandra-1
+      - cassandra-2
+      - cassandra-3
+
 networks:
   cassandra:
     ipam:

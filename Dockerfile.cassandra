@@ -1,0 +1,11 @@
+FROM alpine:latest
+
+RUN addgroup -g 1001 -S microuser && adduser -u 1001 -S microuser  -G microuser
+
+ADD ./bin/cassandra /app/bin/
+WORKDIR /app
+
+EXPOSE 8000
+
+USER microuser
+CMD ["./bin/cassandra"]
