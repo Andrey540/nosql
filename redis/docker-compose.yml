@@ -1,0 +1,51 @@
+version: '3.5'
+
+services:
+  redis-node-1:
+    image: 'bitnami/redis:latest'
+    container_name: redis-node-1
+    environment:
+      - REDIS_REPLICATION_MODE=master
+      - ALLOW_EMPTY_PASSWORD=yes
+    volumes:
+      - "${PWD}/BIG_JSON.json:/tmp/BIG_JSON.json"
+      - "${PWD}/BIG_HSET_JSON.json:/tmp/BIG_HSET_JSON.json"
+      - "${PWD}/BIG_LPUSH_JSON.json:/tmp/BIG_LPUSH_JSON.json"
+      - "${PWD}/BIG_ZSET_JSON.json:/tmp/BIG_ZSET_JSON.json"
+
+  redis-node-2: &redis-slave
+    image: 'bitnami/redis:latest'
+    container_name: redis-node-2
+    environment:
+      - REDIS_REPLICATION_MODE=slave
+      - REDIS_MASTER_HOST=redis-node-1
+      - ALLOW_EMPTY_PASSWORD=yes
+    depends_on:
+      - redis-node-1
+
+  redis-node-3:
+    <<: *redis-slave
+    container_name: redis-node-3
+
+  redis-sentinel-1: &redis-sentinel
+    image: 'bitnami/redis-sentinel:latest'
+    container_name: redis-sentinel-1
+    environment:
+      - REDIS_MASTER_HOST=redis-node-1
+      - REDIS_SENTINEL_DOWN_AFTER_MILLISECONDS=1000
+      - REDIS_SENTINEL_FAILOVER_TIMEOUT=1500
+      - REDIS_SENTINEL_RESOLVE_HOSTNAMES=yes
+    depends_on:
+      - redis-node-1
+      - redis-node-2
+      - redis-node-3
+    ports:
+      - '26379-26381:26379'
+
+  redis-sentinel-2:
+    <<: *redis-sentinel
+    container_name: redis-sentinel-2
+
+  redis-sentinel-3:
+    <<: *redis-sentinel
+    container_name: redis-sentinel-3
