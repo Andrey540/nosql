@@ -139,7 +139,7 @@ end
 expirationd.start(job_name, space.id, isUserBillingEmpty, {
     process_expired_tuple = alertUserEmpty,
     args = nil,
-    tuples_per_iteration = 1,
+    tuples_per_iteration = 50,
     full_scan_time = 3600
 })
 ```
