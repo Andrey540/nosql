@@ -1,0 +1,41 @@
+version: '3.5'
+
+services:
+  mongodb_1:
+    image: mongo:6.0.1
+    container_name: mongodb_1
+    command: --replSet rs1
+    volumes:
+      - ./scripts:/scripts
+      - mongodb_data_1:/data/db
+    ports:
+      - 127.0.10.1:27017:27017
+
+  mongodb_2:
+    image: mongo:6.0.1
+    container_name: mongodb_2
+    command: -replSet rs1
+    volumes:
+      - ./scripts:/scripts
+      - mongodb_data_2:/data/db
+    ports:
+      - 127.0.10.2:27017:27017
+    depends_on:
+      - mongodb_1
+
+  mongodb_3:
+    image: mongo:6.0.1
+    container_name: mongodb_3
+    command: --replSet rs1
+    volumes:
+      - ./scripts:/scripts
+      - mongodb_data_3:/data/db
+    ports:
+      - 127.0.10.3:27017:27017
+    depends_on:
+      - mongodb_1
+
+volumes:
+  mongodb_data_1:
+  mongodb_data_2:
+  mongodb_data_3:
