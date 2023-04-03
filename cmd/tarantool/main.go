@@ -4,13 +4,11 @@ import (
 	"fmt"
 	"github.com/Pallinder/go-randomdata"
 	"github.com/callicoder/go-docker/pkg/common/infrastructure/server"
-	"github.com/couchbase/gocb/v2"
-	"github.com/pkg/errors"
+	"github.com/tarantool/go-tarantool"
 	"io"
 	"log"
 	"math/rand"
 	"net/http"
-	"strconv"
 	"sync"
 	"time"
 )
@@ -31,30 +29,13 @@ type User struct {
 }
 
 func main() {
-	username := "test"
-	password := "administrator"
-
-	options := gocb.ClusterOptions{
-		Authenticator: gocb.PasswordAuthenticator{
-			Username: username,
-			Password: password,
-		},
-	}
-
-	cluster, err := gocb.Connect("couchbase://172.18.0.5", options)
+	opts := tarantool.Opts{User: "guest", Pass: ""}
+	address := fmt.Sprintf("%s:%s", "127.0.0.1", "3301")
+	connection, err := tarantool.Connect(address, opts)
 	if err != nil {
 		log.Fatal(err)
 	}
-	defer cluster.Close(nil)
-
-	bucket := cluster.Bucket("travel-sample")
-
-	err = bucket.WaitUntilReady(5*time.Second, nil)
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	collection := bucket.Scope("tenant_agent_01").Collection("users")
+	defer connection.Close()
 
 	logger := server.InitLogger()
 	errorLogger := server.InitErrorLogger()
@@ -65,8 +46,8 @@ func main() {
 	server.ServeHTTP(
 		":8090",
 		serverHub,
-		getHandler(*collection),
-		getNameHandler(*cluster),
+		getHandler(connection),
+		getHandlerName(connection),
 		logger, errorLogger)
 
 	err = serverHub.Wait()
@@ -74,58 +55,44 @@ func main() {
 		errorLogger.Println(err)
 	}
 
-	//testWrites(*collection)
-	//testReads(*collection)
+	//testWrites(connection)
+	//testReads(connection)
 }
 
-func getHandler(collection gocb.Collection) http.HandlerFunc {
+func getHandler(connection *tarantool.Connection) http.HandlerFunc {
 	return func(w http.ResponseWriter, _ *http.Request) {
 		id := rand.Int63n(threadsCount * rowsPerThread * 2)
-		_, err := collection.Get(strconv.FormatUint(uint64(id), 10), nil)
+		var result []User
+		err := connection.SelectTyped("user", "primary", 0, 1, tarantool.IterEq, []interface{}{id}, &result)
 		if err != nil {
-			// fmt.Println(err)
-			if !errors.Is(err, gocb.ErrDocumentNotFound) {
-				w.WriteHeader(http.StatusInternalServerError)
-				_, _ = io.WriteString(w, http.StatusText(http.StatusInternalServerError))
-				return
-			}
+			//	fmt.Println(err)
+			w.WriteHeader(http.StatusInternalServerError)
+			_, _ = io.WriteString(w, http.StatusText(http.StatusInternalServerError))
+			return
 		}
 		w.WriteHeader(http.StatusOK)
 		_, _ = io.WriteString(w, http.StatusText(http.StatusOK))
 	}
 }
 
-func getNameHandler(cluster gocb.Cluster) http.HandlerFunc {
+func getHandlerName(connection *tarantool.Connection) http.HandlerFunc {
 	return func(w http.ResponseWriter, _ *http.Request) {
 		gender := rand.Intn(1)
 		name := randomdata.FirstName(gender)
-		queryResult, err := cluster.Query(
-			fmt.Sprintf("SELECT * FROM `travel-sample`.tenant_agent_01.users WHERE first_name = '"+name+"' limit 1000;"),
-			&gocb.QueryOptions{},
-		)
+		var result []User
+		err := connection.SelectTyped("user", "first_name_idx", 0, 10000, tarantool.IterEq, []interface{}{name}, &result)
 		if err != nil {
-			// fmt.Println(err)
-			if !errors.Is(err, gocb.ErrDocumentNotFound) {
-				w.WriteHeader(http.StatusInternalServerError)
-				_, _ = io.WriteString(w, http.StatusText(http.StatusInternalServerError))
-				return
-			}
-		}
-		for queryResult.Next() {
-			var result interface{}
-			err = queryResult.Row(&result)
-			if err != nil {
-				w.WriteHeader(http.StatusInternalServerError)
-				_, _ = io.WriteString(w, http.StatusText(http.StatusInternalServerError))
-				return
-			}
+			//	fmt.Println(err)
+			w.WriteHeader(http.StatusInternalServerError)
+			_, _ = io.WriteString(w, http.StatusText(http.StatusInternalServerError))
+			return
 		}
 		w.WriteHeader(http.StatusOK)
 		_, _ = io.WriteString(w, http.StatusText(http.StatusOK))
 	}
 }
 
-func testWrites(collection gocb.Collection) {
+func testWrites(connection *tarantool.Connection) {
 	var wg sync.WaitGroup
 	wg.Add(threadsCount)
 
@@ -137,7 +104,10 @@ func testWrites(collection gocb.Collection) {
 
 			for i := 1; i <= rowsPerThread; i++ {
 				id := baseId + uint64(i)
-				_, err := collection.Upsert(strconv.FormatUint(id, 10), generateUser(id), nil)
+
+				user := generateUser(id)
+				var result []User
+				err := connection.InsertTyped("user", []interface{}{user.ID, user.FirstName, user.LastName, user.Gender, user.Email, user.Phone, user.Registered, user.Phone, user.Avatar}, &result)
 
 				if err != nil {
 					log.Println(err)
@@ -150,7 +120,7 @@ func testWrites(collection gocb.Collection) {
 	fmt.Println("Write time:", time.Now().UnixMilli()-currentTime)
 }
 
-func testReads(collection gocb.Collection) {
+func testReads(connection *tarantool.Connection) {
 	var wg sync.WaitGroup
 	wg.Add(threadsCount)
 
@@ -162,7 +132,8 @@ func testReads(collection gocb.Collection) {
 
 			for i := 1; i <= rowsPerThread; i++ {
 				id := baseId + uint64(i)
-				_, err := collection.Get(strconv.FormatUint(id, 10), nil)
+				var result []User
+				err := connection.SelectTyped("user", "primary", 0, 1, tarantool.IterEq, []interface{}{id}, &result)
 				if err != nil {
 					log.Println(err)
 					return

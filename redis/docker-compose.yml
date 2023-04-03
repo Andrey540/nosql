@@ -7,6 +7,8 @@ services:
     environment:
       - REDIS_REPLICATION_MODE=master
       - ALLOW_EMPTY_PASSWORD=yes
+    ports:
+      - '6379:6379'
     volumes:
       - "${PWD}/BIG_JSON.json:/tmp/BIG_JSON.json"
       - "${PWD}/BIG_HSET_JSON.json:/tmp/BIG_HSET_JSON.json"

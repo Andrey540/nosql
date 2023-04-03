@@ -1,10 +1,11 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"github.com/Pallinder/go-randomdata"
 	"github.com/callicoder/go-docker/pkg/common/infrastructure/server"
-	"github.com/couchbase/gocb/v2"
+	"github.com/go-redis/redis/v8"
 	"github.com/pkg/errors"
 	"io"
 	"log"
@@ -15,8 +16,19 @@ import (
 	"time"
 )
 
-const threadsCount = 100
-const rowsPerThread = 100000
+const (
+	threadsCount  = 100
+	rowsPerThread = 100000
+	idKey         = "id"
+	firstNameKey  = "first_name"
+	lastNameKey   = "last_name"
+	genderKey     = "gender"
+	emailKey      = "email"
+	phoneKey      = "phone"
+	registeredKey = "registered"
+	countryKey    = "country"
+	avatarKey     = "avatar"
+)
 
 type User struct {
 	ID         uint64 `json:"id"`
@@ -31,30 +43,21 @@ type User struct {
 }
 
 func main() {
-	username := "test"
-	password := "administrator"
-
-	options := gocb.ClusterOptions{
-		Authenticator: gocb.PasswordAuthenticator{
-			Username: username,
-			Password: password,
-		},
+	client := redis.NewClient(&redis.Options{
+		Addr:     "127.0.0.1:6379",
+		Password: "",
+	})
+	if client == nil {
+		log.Fatal("redis client pointer = nil")
+		return
 	}
-
-	cluster, err := gocb.Connect("couchbase://172.18.0.5", options)
+	ctx := context.Background()
+	_, err := client.Ping(ctx).Result()
 	if err != nil {
 		log.Fatal(err)
+		return
 	}
-	defer cluster.Close(nil)
-
-	bucket := cluster.Bucket("travel-sample")
-
-	err = bucket.WaitUntilReady(5*time.Second, nil)
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	collection := bucket.Scope("tenant_agent_01").Collection("users")
+	defer client.Close()
 
 	logger := server.InitLogger()
 	errorLogger := server.InitErrorLogger()
@@ -65,8 +68,8 @@ func main() {
 	server.ServeHTTP(
 		":8090",
 		serverHub,
-		getHandler(*collection),
-		getNameHandler(*cluster),
+		getHandler(ctx, client),
+		getHandlerName(ctx, client),
 		logger, errorLogger)
 
 	err = serverHub.Wait()
@@ -74,17 +77,18 @@ func main() {
 		errorLogger.Println(err)
 	}
 
-	//testWrites(*collection)
-	//testReads(*collection)
+	//testWrites(ctx, client)
+	//testReads(ctx, client)
 }
 
-func getHandler(collection gocb.Collection) http.HandlerFunc {
+func getHandler(ctx context.Context, client *redis.Client) http.HandlerFunc {
 	return func(w http.ResponseWriter, _ *http.Request) {
 		id := rand.Int63n(threadsCount * rowsPerThread * 2)
-		_, err := collection.Get(strconv.FormatUint(uint64(id), 10), nil)
+		key := fmt.Sprintf("user:%d", id)
+		_, err := client.Get(ctx, key).Result()
 		if err != nil {
-			// fmt.Println(err)
-			if !errors.Is(err, gocb.ErrDocumentNotFound) {
+			//	fmt.Println(err)
+			if !errors.Is(err, redis.Nil) {
 				w.WriteHeader(http.StatusInternalServerError)
 				_, _ = io.WriteString(w, http.StatusText(http.StatusInternalServerError))
 				return
@@ -95,26 +99,14 @@ func getHandler(collection gocb.Collection) http.HandlerFunc {
 	}
 }
 
-func getNameHandler(cluster gocb.Cluster) http.HandlerFunc {
+func getHandlerName(ctx context.Context, client *redis.Client) http.HandlerFunc {
 	return func(w http.ResponseWriter, _ *http.Request) {
-		gender := rand.Intn(1)
-		name := randomdata.FirstName(gender)
-		queryResult, err := cluster.Query(
-			fmt.Sprintf("SELECT * FROM `travel-sample`.tenant_agent_01.users WHERE first_name = '"+name+"' limit 1000;"),
-			&gocb.QueryOptions{},
-		)
+		id := rand.Int63n(threadsCount * rowsPerThread * 2)
+		key := fmt.Sprintf("user:%d", id)
+		_, err := client.Get(ctx, key).Result()
 		if err != nil {
-			// fmt.Println(err)
-			if !errors.Is(err, gocb.ErrDocumentNotFound) {
-				w.WriteHeader(http.StatusInternalServerError)
-				_, _ = io.WriteString(w, http.StatusText(http.StatusInternalServerError))
-				return
-			}
-		}
-		for queryResult.Next() {
-			var result interface{}
-			err = queryResult.Row(&result)
-			if err != nil {
+			//	fmt.Println(err)
+			if !errors.Is(err, redis.Nil) {
 				w.WriteHeader(http.StatusInternalServerError)
 				_, _ = io.WriteString(w, http.StatusText(http.StatusInternalServerError))
 				return
@@ -125,7 +117,7 @@ func getNameHandler(cluster gocb.Cluster) http.HandlerFunc {
 	}
 }
 
-func testWrites(collection gocb.Collection) {
+func testWrites(ctx context.Context, client *redis.Client) {
 	var wg sync.WaitGroup
 	wg.Add(threadsCount)
 
@@ -137,10 +129,12 @@ func testWrites(collection gocb.Collection) {
 
 			for i := 1; i <= rowsPerThread; i++ {
 				id := baseId + uint64(i)
-				_, err := collection.Upsert(strconv.FormatUint(id, 10), generateUser(id), nil)
-
+				key := fmt.Sprintf("%d", id)
+				user := generateUser(id)
+				userMap := map[string]interface{}{idKey: user.ID, firstNameKey: user.FirstName, lastNameKey: user.FirstName, genderKey: strconv.Itoa(user.Gender), emailKey: user.Email, phoneKey: user.Phone, registeredKey: user.Registered, countryKey: user.Country, avatarKey: user.Avatar}
+				_, err := client.HSet(ctx, key, userMap).Result()
 				if err != nil {
-					log.Println(err)
+					log.Println(err, key)
 					return
 				}
 			}
@@ -150,7 +144,7 @@ func testWrites(collection gocb.Collection) {
 	fmt.Println("Write time:", time.Now().UnixMilli()-currentTime)
 }
 
-func testReads(collection gocb.Collection) {
+func testReads(ctx context.Context, client *redis.Client) {
 	var wg sync.WaitGroup
 	wg.Add(threadsCount)
 
@@ -162,9 +156,11 @@ func testReads(collection gocb.Collection) {
 
 			for i := 1; i <= rowsPerThread; i++ {
 				id := baseId + uint64(i)
-				_, err := collection.Get(strconv.FormatUint(id, 10), nil)
+				key := fmt.Sprintf("%d", id)
+
+				_, err := client.HGetAll(ctx, key).Result()
 				if err != nil {
-					log.Println(err)
+					log.Println(err, key)
 					return
 				}
 			}

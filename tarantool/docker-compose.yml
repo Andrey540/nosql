@@ -1,6 +1,42 @@
 version: '3.5'
 
 services:
-  tarantool:
+  tarantool1:
     image: tarantool/tarantool:2.10
-    container_name: tarantool
+    container_name: tarantool1
+    environment:
+      TARANTOOL_REPLICATION: "tarantool1,tarantool2,tarantool3"
+    networks:
+      - mynet
+    volumes:
+      - "${PWD}/tarantool-entrypoint.lua:/usr/local/bin/tarantool-entrypoint.lua"
+    ports:
+      - "3301:3301"
+
+  tarantool2:
+    image: tarantool/tarantool:2.10
+    container_name: tarantool2
+    environment:
+      TARANTOOL_REPLICATION: "tarantool1,tarantool2,tarantool3"
+    networks:
+      - mynet
+    volumes:
+      - "${PWD}/tarantool-entrypoint.lua:/usr/local/bin/tarantool-entrypoint.lua"
+    ports:
+      - "3302:3301"
+
+  tarantool3:
+    image: tarantool/tarantool:2.10
+    container_name: tarantool3
+    environment:
+      TARANTOOL_REPLICATION: "tarantool1,tarantool2,tarantool3"
+    networks:
+      - mynet
+    volumes:
+      - "${PWD}/tarantool-entrypoint.lua:/usr/local/bin/tarantool-entrypoint.lua"
+    ports:
+      - "3303:3301"
+
+networks:
+  mynet:
+    driver: bridge

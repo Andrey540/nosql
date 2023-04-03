@@ -7,7 +7,9 @@ APP_CMD_NAMES = \
 	mongo \
 	mongo-cloud \
 	couchbase \
-	scylla
+	scylla \
+	tarantool \
+	redis
 
 # Contains common make targets, including 'build', 'test' and 'check'
 include make/rules.mk
